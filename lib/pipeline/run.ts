@@ -39,7 +39,7 @@ export async function runPostApprovalPipeline(jobId: string): Promise<Job> {
     updateJob(jobId, { subtitlesVtt });
 
     // Step 3 — VEED Fabric: illustrated presenter + audio -> lip-synced video
-    const videoUrl = await renderVideo(presenterImageUrl(), speech.audioUrl);
+    const videoUrl = await renderVideo(presenterImageUrl(job.targetLanguage), speech.audioUrl);
     console.log(`[pipeline] ${jobId}: video ready`);
 
     // Step 5 — finish

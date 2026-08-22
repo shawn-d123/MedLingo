@@ -38,11 +38,14 @@ export async function renderVideo(presenterImageUrl: string, audioUrl: string): 
   return url;
 }
 
-export function presenterImageUrl(): string {
-  const url = process.env.PRESENTER_IMAGE_URL;
+// Per-language presenter when configured (PRESENTER_IMAGE_URL_UR / _PL),
+// falling back to the shared PRESENTER_IMAGE_URL.
+export function presenterImageUrl(lang?: string): string {
+  const perLang = lang ? process.env[`PRESENTER_IMAGE_URL_${lang.toUpperCase()}`] : undefined;
+  const url = perLang ?? process.env.PRESENTER_IMAGE_URL;
   if (!url) {
     throw new Error(
-      "PRESENTER_IMAGE_URL is not set — run `npm run presenter` once to generate the illustrated presenter, then paste the printed URL into .env.local"
+      "PRESENTER_IMAGE_URL is not set — run `npm run presenter -- both` to generate presenters, then restart the server"
     );
   }
   return url;
