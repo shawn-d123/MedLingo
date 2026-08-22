@@ -53,8 +53,10 @@ export async function extractFromImage(imageUrl: string): Promise<RawExtraction>
             '"warnings":[string]}],"transcription":string,"notes":string}. days=0 if unstated. warnings = ' +
             "any return-if/watch-for signs mentioned on the sheet. transcription = a full readable " +
             "transcription of the document, with every patient-identifying line (name, NHS number, date of " +
-            'birth, address) replaced by "[patient details removed]". DO NOT include patient name, NHS ' +
-            "number, date of birth, address or any other identifying detail anywhere in the output. If no " +
+            'birth, address) replaced by "[patient details removed]", and every clinician/prescriber name, ' +
+            'signature, and registration number (e.g. GMC) replaced by "[clinician details removed]". DO NOT ' +
+            "include any person's name — patient or staff — NHS number, date of birth, address, or any other " +
+            "identifying detail anywhere in the output. If no " +
             'medication is legible, return {"medications":[],"transcription":"","notes":"<why>"}.',
         },
         {
@@ -74,11 +76,17 @@ export async function extractFromImage(imageUrl: string): Promise<RawExtraction>
   return parsed;
 }
 
-// Regex scrub for identifiers leaking into free-text fields (NHS numbers, DOBs).
+// Regex scrub for identifiers leaking into free-text fields. The vision model
+// is INSTRUCTED to redact, but a safety claim can't rest on an instruction —
+// these run deterministically on top: NHS-number shapes, dates, GMC numbers,
+// and clinician names in their structural positions on a prescription.
 export function scrubText(s: string): string {
   return s
     .replace(/\b\d{3}[ -]?\d{3}[ -]?\d{4}\b/g, "[removed]") // NHS number shape
     .replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-](?:19|20)\d{2}\b/g, "[removed]") // dates e.g. DOB
+    .replace(/\(\s*gmc[^)]*\)/gi, "(GMC [removed])")
+    .replace(/\b(prescriber|signed|signature|clinician|doctor|gp)\s*:\s*[^\n(]+/gi, "$1: [clinician details removed] ")
+    .replace(/\b[Dd]r\.?\s+(?:[A-Z]\.?\s*)*[A-Z][\w'’-]+/g, "[clinician details removed]")
     .trim();
 }
 
