@@ -59,7 +59,40 @@ export function FlaggedText({
 }
 
 /** Terms that appear in the source script but not in the back-translation. */
+/** Spelling/format differences that are NOT divergences: UK/US medical
+ * spellings and spacing between a number and its unit. */
+const SPELLING_EQUIVALENTS: Array<[RegExp, string]> = [
+  [/diarrhoea/g, "diarrhea"],
+  [/anaemia/g, "anemia"],
+  [/oedema/g, "edema"],
+  [/haemorrh/g, "hemorrh"],
+  [/paediatric/g, "pediatric"],
+  [/oesophag/g, "esophag"],
+];
+
+function normalizeForMatch(text: string) {
+  let out = text.toLowerCase();
+  for (const [pattern, replacement] of SPELLING_EQUIVALENTS) out = out.replace(pattern, replacement);
+  return out
+    .replace(/(\d)\s+(mg|g|ml|mcg|µg|iu)\b/g, "$1$2")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/**
+ * A term is only reported as divergent when the evidence agrees it is:
+ * translations legitimately paraphrase, so literal absence alone is not a
+ * failure. We flag when the semantic round-trip score says the meaning
+ * slipped (< 0.8), or when the term is absent even after normalisation AND
+ * the score is not near-certain (< 0.95).
+ */
 export function findDivergences(flags: Flag[], backTranslation: string) {
-  const haystack = backTranslation.toLowerCase();
-  return flags.map((f) => f.term).filter((term) => !haystack.includes(term.toLowerCase()));
+  const haystack = normalizeForMatch(backTranslation);
+  return flags
+    .filter((f) => {
+      const found = haystack.includes(normalizeForMatch(f.term));
+      if (f.confidence < 0.8) return true;
+      return !found && f.confidence < 0.95;
+    })
+    .map((f) => f.term);
 }

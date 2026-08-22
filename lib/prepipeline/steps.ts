@@ -334,7 +334,9 @@ export async function verifyTranslation(
             "term in the original (each drug name, dosage amount, frequency, duration, and warning sign), score " +
             "how faithfully its meaning survived the round trip: 1.0 = identical meaning, below 0.7 = meaning " +
             'diverged and a clinician must check it. Return JSON {"flags":[{"term":string,"kind":"drug"|"dosage"|' +
-            '"frequency"|"duration"|"warning","confidence":number}]} covering ALL such terms, diverged or not.',
+            '"frequency"|"duration"|"warning","confidence":number}]} covering ALL such terms, diverged or not. ' +
+            "Each term MUST be copied character-for-character from the ORIGINAL script — an exact verbatim " +
+            "substring, never paraphrased, re-spelled, or reworded.",
         },
         { role: "user", content: `ORIGINAL:\n${plainScript}\n\nBACK-TRANSLATION:\n${backTranslation}` },
       ],
@@ -342,7 +344,22 @@ export async function verifyTranslation(
     LLM_TIMEOUT_MS,
     "Divergence flagging"
   );
-  const flags = parseJson<{ flags: Flag[] }>(f.choices[0]?.message?.content ?? "", "Divergence flagging").flags ?? [];
+  const rawFlags = parseJson<{ flags: Flag[] }>(f.choices[0]?.message?.content ?? "", "Divergence flagging").flags ?? [];
+
+  // Anchor every term to the script's exact wording so A's approval screen can
+  // highlight it — the model occasionally re-spells despite the instruction.
+  const seen = new Set<string>();
+  const flags = rawFlags
+    .map((f) => {
+      const idx = plainScript.toLowerCase().indexOf(f.term.toLowerCase());
+      return idx >= 0 ? { ...f, term: plainScript.slice(idx, idx + f.term.length) } : f;
+    })
+    .filter((f) => {
+      const key = `${f.kind}|${f.term.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
   return { translation, backTranslation, flags };
 }

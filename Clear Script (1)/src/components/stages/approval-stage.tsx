@@ -157,7 +157,7 @@ export function ApprovalStage({
                 {flag.kind}
                 <span className="mx-1.5 opacity-50">·</span>
                 {flag.confidence.toFixed(2)}
-                {divergent && <span className="ml-1.5 font-semibold">missing in back-translation</span>}
+                {divergent && <span className="ml-1.5 font-semibold">check back-translation</span>}
               </Badge>
             );
           })}
@@ -300,7 +300,7 @@ export function ApprovalStage({
           />
           {divergences.length > 0 && (
             <p className="mt-4 rounded-xl border border-divergence bg-divergence-surface px-4 py-3 text-sm text-divergence-foreground">
-              These terms did not survive the round trip:{" "}
+              These terms may not have survived the round trip:{" "}
               <span className="font-mono font-semibold">{divergences.join(", ")}</span>. Edit the
               translation and re-check before approving.
             </p>
