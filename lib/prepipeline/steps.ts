@@ -157,10 +157,13 @@ export async function structureCleanup(
   }
 }
 
-// Video render time scales with audio length, and a patient stops absorbing a
-// spoken list after about a minute — so the script has a hard ceiling even
-// when the sheet lists several medicines.
-const MAX_SCRIPT_WORDS = Number(process.env.MAX_SCRIPT_WORDS ?? 130);
+// Hard ceiling on spoken length: render time scales with audio duration, and
+// a patient stops absorbing a spoken list after half a minute anyway. At a
+// normal speaking pace (~2.5 words/sec) 75 words is about 30 seconds — the
+// cap applies no matter how many medicines are on the sheet.
+const MAX_SPOKEN_SECONDS = Number(process.env.MAX_SPOKEN_SECONDS ?? 30);
+const WORDS_PER_SECOND = 2.5;
+const MAX_SCRIPT_WORDS = Math.round(MAX_SPOKEN_SECONDS * WORDS_PER_SECOND);
 
 const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -170,8 +173,7 @@ export async function writePlainScript(
 ): Promise<string> {
   if (extracted.length === 0) throw new Error("No medications extracted — nothing to write a script for.");
 
-  // Budget scales a little with the number of medicines, but never past the cap.
-  const budget = Math.min(MAX_SCRIPT_WORDS, 60 + (extracted.length - 1) * 25);
+  const budget = MAX_SCRIPT_WORDS;
 
   const res = await withTimeout(
     openai().chat.completions.create({
@@ -182,12 +184,13 @@ export async function writePlainScript(
           content:
             "You write short spoken scripts explaining medication instructions to patients. Plain language at " +
             'a sixth-grade reading level — "take one capsule three times a day with food", never "TDS PO". ' +
-            `HARD LIMIT: no more than ${budget} words in total — this is a spoken script and going over ` +
-            "makes the video too long to be useful. For each medicine give only: what it is (a few words), " +
-            "how much, how often and when, and for how long (say to finish the course if it is an " +
-            "antibiotic). Then ONE short combined sentence covering the most important warning signs across " +
-            "all the medicines — do not list every possible side effect. Warm, calm, direct address. No " +
-            "greetings, no sign-off, no patient name. Output the script text only.",
+            `HARD LIMIT: ${budget} words in total, about ${MAX_SPOKEN_SECONDS} seconds spoken. This is the ` +
+            "whole script even if there are several medicines, so be brief: for each medicine give only how " +
+            "much, how often, and for how long (say to finish the course if it is an antibiotic). Name what " +
+            "the medicine is for in two or three words at most, and only if it fits. End with ONE short " +
+            "sentence naming the most serious warning signs across all the medicines — never list every " +
+            "side effect. Warm, calm, direct address. No greetings, no sign-off, no patient name. Output " +
+            "the script text only.",
         },
         { role: "user", content: JSON.stringify(extracted) },
       ],
@@ -207,28 +210,49 @@ export async function writePlainScript(
  * a shortened script must still be a correct one.
  */
 export async function condenseScript(script: string, budget = MAX_SCRIPT_WORDS): Promise<string> {
-  if (wordCount(script) <= budget) return script;
-  console.log(`[prepipeline] script is ${wordCount(script)} words (budget ${budget}) — condensing`);
+  let current = script;
 
-  const res = await withTimeout(
-    openai().chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content:
-            `Shorten this spoken patient script to ${budget} words or fewer. You MUST keep every drug name, ` +
-            "dose, frequency, timing and duration exactly as written. Compress only the warning signs — keep " +
-            "the most serious ones and drop the rest. Keep the plain sixth-grade tone. Output the script only.",
-        },
-        { role: "user", content: script },
-      ],
-    }),
-    LLM_TIMEOUT_MS,
-    "Script condensing"
-  );
-  const shortened = res.choices[0]?.message?.content?.trim();
-  return shortened && wordCount(shortened) < wordCount(script) ? shortened : script;
+  // Two passes: the first keeps warnings in reduced form, the second strips
+  // them to the single most serious one. Dose, frequency and duration are
+  // never droppable — a sheet with several medicines has a floor below which
+  // the script cannot go, and correctness beats the cap.
+  for (let pass = 1; pass <= 2 && wordCount(current) > budget; pass++) {
+    console.log(`[prepipeline] script ${wordCount(current)} words > budget ${budget} — condense pass ${pass}`);
+    const res = await withTimeout(
+      openai().chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content:
+              `Shorten this spoken patient script to ${budget} words or fewer. You MUST keep every drug name, ` +
+              "dose, frequency, timing and duration exactly as written — never drop or merge a medicine. " +
+              "You MUST also keep the return-advice that came from the prescription itself (the signs the " +
+              "sheet says to come back for) — drop leaflet-sourced side effects before ever dropping those. " +
+              (pass === 1
+                ? "Compress the warning signs, keeping the sheet's own and the most serious others. "
+                : "Cut the warnings down to ONE short closing sentence — the sheet's own return-advice if it " +
+                  "has any. Use telegraphic phrasing where it still reads naturally. ") +
+              "Keep the plain sixth-grade tone. Output the script only.",
+          },
+          { role: "user", content: current },
+        ],
+      }),
+      LLM_TIMEOUT_MS,
+      "Script condensing"
+    );
+    const shortened = res.choices[0]?.message?.content?.trim();
+    if (!shortened || wordCount(shortened) >= wordCount(current)) break;
+    current = shortened;
+  }
+
+  if (wordCount(current) > budget) {
+    console.log(
+      `[prepipeline] script settled at ${wordCount(current)} words (~${Math.round(wordCount(current) / 2.5)}s) ` +
+        `— above the ${budget}-word target, but every dose is preserved`
+    );
+  }
+  return current;
 }
 
 export interface GroundingNote {

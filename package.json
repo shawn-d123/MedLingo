@@ -11,7 +11,8 @@
     "voice-test": "tsx scripts/voice-test.ts",
     "render-once": "tsx scripts/run-once.ts",
     "backups": "tsx scripts/backups.ts",
-    "read": "tsx scripts/prepipeline-cli.ts"
+    "read": "tsx scripts/prepipeline-cli.ts",
+    "keycheck": "tsx scripts/keycheck.ts"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
