@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJob, updateJob } from "@/lib/store";
 import { runPostApprovalPipeline } from "@/lib/pipeline/run";
+import { applyEdits } from "@/lib/prepipeline/run";
+import type { EditedFields } from "@/lib/types";
 
 /**
- * The clinician's approve action. Sets approvedAt, then fires Person C's
- * pipeline. Direct call from the route handler is deliberate — a 9-hour build
- * does not need a job queue. The pipeline updates the job as it goes, so A's
- * polling GET reflects progress.
+ * The clinician's approve action. Body may carry { editedFields } when the
+ * clinician edited on the approval screen and approved in one tap — those
+ * edits are applied AND re-verified (fresh back-translation + flags) BEFORE
+ * approvedAt is set. Edits never dodge the safety check, and nothing is
+ * approved that wasn't verified in the exact form that will be spoken.
+ *
+ * Then Person C's pipeline fires. Direct call from the route handler is
+ * deliberate — a 9-hour build does not need a job queue.
  */
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const job = getJob(id);
   if (!job) return NextResponse.json({ error: `Unknown job: ${id}` }, { status: 404 });
@@ -18,6 +24,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       { error: `Job ${id} is "${job.status}", not "awaiting_approval" — nothing to approve.` },
       { status: 409 }
     );
+  }
+
+  const body = (await req.json().catch(() => ({}))) as { editedFields?: EditedFields };
+  if (body.editedFields) {
+    try {
+      await applyEdits(id, body.editedFields);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Edits could not be verified: ${message}` }, { status: 422 });
+    }
   }
 
   const approved = updateJob(id, { approvedAt: new Date().toISOString(), status: "synthesizing" });

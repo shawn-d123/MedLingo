@@ -2,12 +2,14 @@ import { getJob, updateJob } from "../store";
 import {
   extractFromImage,
   stripPii,
+  scrubText,
   structureCleanup,
   writePlainScript,
   groundAndRefine,
   translateAndVerify,
+  verifyTranslation,
 } from "./steps";
-import type { Job } from "../types";
+import type { EditedFields, Job } from "../types";
 
 /**
  * Person B's chain: photo -> extract -> strip PII -> structure -> plain script
@@ -25,7 +27,8 @@ export async function runPreApprovalPipeline(jobId: string): Promise<Job> {
     const raw = await extractFromImage(job.sourceImageUrl);
     let extracted = stripPii(raw); // PII gone before anything else moves
     extracted = await structureCleanup(extracted);
-    updateJob(jobId, { extracted });
+    const transcription = scrubText(raw.transcription ?? "");
+    updateJob(jobId, { extracted, transcription });
     console.log(`[prepipeline] ${jobId}: extracted ${extracted.length} medication(s)`);
 
     updateJob(jobId, { status: "grounding" });
@@ -47,22 +50,70 @@ export async function runPreApprovalPipeline(jobId: string): Promise<Job> {
 }
 
 /**
- * Edit-and-recheck: the clinician edited plainScript on the approval screen
- * instead of approving. Re-enters the chain at translation — never restarts
- * from the photo — and returns the job to awaiting_approval.
+ * Apply clinician edits from A's approval screen, re-verifying whatever the
+ * edits touched. Used by BOTH /recheck and /approve (approve-with-edits):
+ * an edited script or translation is never carried forward without a fresh
+ * back-translation and fresh flags — edits must not dodge the safety check.
  */
-export async function recheckJob(jobId: string, editedPlainScript?: string): Promise<Job> {
+export async function applyEdits(jobId: string, edited: EditedFields): Promise<Job> {
+  const job = getJob(jobId);
+  if (!job) throw new Error(`Unknown job: ${jobId}`);
+
+  // Verbatim fields first — no downstream consequences.
+  const verbatim: Partial<Job> = {};
+  if (edited.extracted) verbatim.extracted = edited.extracted;
+  if (edited.transcription !== undefined) verbatim.transcription = edited.transcription;
+  if (Object.keys(verbatim).length > 0) updateJob(jobId, verbatim);
+
+  const scriptChanged =
+    edited.plainScript !== undefined && edited.plainScript.trim() !== job.plainScript.trim();
+  const translationChanged =
+    edited.translation !== undefined && edited.translation.trim() !== job.translation.trim();
+
+  if (scriptChanged && !translationChanged) {
+    // New English script -> full re-translate + verify.
+    const plainScript = edited.plainScript!.trim();
+    updateJob(jobId, { plainScript });
+    const result = await translateAndVerify(plainScript, job.targetLanguage);
+    return updateJob(jobId, { ...result });
+  }
+
+  if (translationChanged) {
+    // Clinician touched the target-language text itself (possibly the script
+    // too) — verify exactly what will be spoken.
+    const plainScript = scriptChanged ? edited.plainScript!.trim() : job.plainScript;
+    const translation = edited.translation!.trim();
+    updateJob(jobId, { plainScript, translation });
+    const result = await verifyTranslation(plainScript, translation, job.targetLanguage);
+    return updateJob(jobId, { ...result });
+  }
+
+  return getJob(jobId)!;
+}
+
+/**
+ * Edit-and-recheck: the clinician edited fields on the approval screen instead
+ * of approving. Re-enters the chain at translation/verification — never
+ * restarts from the photo — and returns the job to awaiting_approval.
+ */
+export async function recheckJob(jobId: string, edited: EditedFields): Promise<Job> {
   const job = getJob(jobId);
   if (!job) throw new Error(`Unknown job: ${jobId}`);
   if (job.approvedAt) throw new Error(`Job ${jobId} is already approved — nothing to re-check.`);
 
-  const plainScript = editedPlainScript?.trim() || job.plainScript;
-  if (!plainScript) throw new Error(`Job ${jobId} has no plainScript to re-check.`);
-
   try {
-    updateJob(jobId, { status: "grounding", plainScript, error: null });
-    const { translation, backTranslation, flags } = await translateAndVerify(plainScript, job.targetLanguage);
-    return updateJob(jobId, { translation, backTranslation, flags, status: "awaiting_approval" });
+    updateJob(jobId, { status: "grounding", error: null });
+    await applyEdits(jobId, edited);
+
+    // If the edits didn't change script or translation, still refresh the
+    // round trip so the clinician gets a current verification to sign off.
+    const current = getJob(jobId)!;
+    if (!current.backTranslation || (!edited.plainScript && !edited.translation)) {
+      const result = await verifyTranslation(current.plainScript, current.translation, current.targetLanguage);
+      updateJob(jobId, { ...result });
+    }
+
+    return updateJob(jobId, { status: "awaiting_approval" });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[prepipeline] recheck ${jobId} FAILED: ${message}`);

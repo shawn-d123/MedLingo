@@ -1,12 +1,35 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PipelineStatus, StatusLine } from "@/components/pipeline-status";
 import { isRtl, languageLabel } from "@/lib/job";
-import { jobQueryOptions } from "@/lib/jobs.api";
+import { jobQueryOptions, jobsApiBase } from "@/lib/jobs.api";
+
+/** English WebVTT from the backend, re-served as a blob: URL so the <track>
+ * loads even though the API lives on another origin during the demo. */
+function useSubtitles(jobId: string, ready: boolean) {
+  const [subsUrl, setSubsUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let objectUrl: string | null = null;
+    fetch(`${jobsApiBase}/${jobId}/subtitles`)
+      .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`${res.status}`))))
+      .then((vtt) => {
+        objectUrl = URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
+        setSubsUrl(objectUrl);
+      })
+      .catch(() => setSubsUrl(null));
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [jobId, ready]);
+  return subsUrl;
+}
 
 export function ResultStage({ jobId, onRestart }: { jobId: string; onRestart: () => void }) {
   const { data: job, isPending } = useQuery(jobQueryOptions(jobId));
+  const subsUrl = useSubtitles(jobId, job?.status === "done");
 
   if (isPending || !job) {
     return (
@@ -31,8 +54,8 @@ export function ResultStage({ jobId, onRestart }: { jobId: string; onRestart: ()
           </h1>
           <p className="mt-2 text-muted-foreground">
             {languageLabel(job.targetLanguage)} · approved
-            {job.approvedAt ? ` ${new Date(job.approvedAt).toLocaleTimeString()}` : ""} · subtitles
-            burned in
+            {job.approvedAt ? ` ${new Date(job.approvedAt).toLocaleTimeString()}` : ""} · English
+            subtitles
           </p>
         </div>
         <PipelineStatus status={job.status} />
@@ -40,14 +63,23 @@ export function ResultStage({ jobId, onRestart }: { jobId: string; onRestart: ()
 
       <section className="soft-card mt-8 overflow-hidden p-4">
         {job.status === "done" && job.outputVideoUrl ? (
-          <video
-            key={job.outputVideoUrl}
-            src={job.outputVideoUrl}
-            controls
-            autoPlay
-            playsInline
-            className="aspect-video w-full rounded-xl bg-foreground"
-          />
+          <div className="relative">
+            <video
+              key={job.outputVideoUrl}
+              src={job.outputVideoUrl}
+              controls
+              autoPlay
+              playsInline
+              className="aspect-video w-full rounded-xl bg-foreground"
+            >
+              {subsUrl && (
+                <track default kind="subtitles" srcLang="en" label="English" src={subsUrl} />
+              )}
+            </video>
+            <span className="absolute left-3 top-3 rounded-full bg-foreground/75 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.14em] text-background">
+              AI-generated presenter
+            </span>
+          </div>
         ) : (
           <div className="soft-inset flex aspect-video w-full flex-col items-center justify-center gap-4">
             <StatusLine status={job.status} />

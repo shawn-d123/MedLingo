@@ -18,6 +18,7 @@ const PATCHABLE: (keyof Job)[] = [
   "sourceImageUrl",
   "targetLanguage",
   "extracted",
+  "transcription",
   "plainScript",
   "translation",
   "backTranslation",

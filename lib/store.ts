@@ -12,6 +12,8 @@ function seed(): Map<string, Job> {
     status: "awaiting_approval" as const,
     sourceImageUrl: null,
     extracted: [{ drug: "Amoxicillin", dose: "500mg", freq: "TDS", days: 7 }],
+    transcription:
+      "[patient details removed]\nRx\nAmoxicillin 500mg capsules\n1 capsule TDS PO with food - 7/7\nComplete the full course even if feeling better.\nReturn advice: if pyrexial or rash develops, return to A&E.",
     plainScript:
       "This medicine is amoxicillin, an antibiotic. Take one capsule of 500 milligrams, three times a day, with food. Keep taking it for the full seven days, even if you start to feel better. If you notice a rash, or you develop a fever, come back to the hospital straight away.",
     flags: [
@@ -83,6 +85,7 @@ export function createJob(partial: Partial<Job> & { targetLanguage?: string }): 
     sourceImageUrl: partial.sourceImageUrl ?? null,
     targetLanguage: partial.targetLanguage ?? "ur",
     extracted: partial.extracted ?? [],
+    transcription: partial.transcription ?? "",
     plainScript: partial.plainScript ?? "",
     translation: partial.translation ?? "",
     backTranslation: partial.backTranslation ?? "",

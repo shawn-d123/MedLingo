@@ -31,6 +31,8 @@ function parseJson<T>(text: string, label: string): T {
 
 export interface RawExtraction {
   medications: (ExtractedMedication & { warnings?: string[] })[];
+  /** Full readable transcription of the sheet, identity lines already redacted by the model. */
+  transcription?: string;
   notes?: string;
 }
 
@@ -48,10 +50,12 @@ export async function extractFromImage(imageUrl: string): Promise<RawExtraction>
             "Expand common abbreviations when interpreting (TDS=three times daily, BD=twice daily, " +
             "OD=once daily, PO=by mouth, 7/7=seven days) but keep the freq field as written on the paper. " +
             'Return JSON: {"medications":[{"drug":string,"dose":string,"freq":string,"days":number,' +
-            '"warnings":[string]}],"notes":string}. days=0 if unstated. warnings = any return-if/watch-for ' +
-            "signs mentioned on the sheet. DO NOT include patient name, NHS number, date of birth, address " +
-            "or any other identifying detail anywhere in the output. If no medication is legible, return " +
-            '{"medications":[],"notes":"<why>"}.',
+            '"warnings":[string]}],"transcription":string,"notes":string}. days=0 if unstated. warnings = ' +
+            "any return-if/watch-for signs mentioned on the sheet. transcription = a full readable " +
+            "transcription of the document, with every patient-identifying line (name, NHS number, date of " +
+            'birth, address) replaced by "[patient details removed]". DO NOT include patient name, NHS ' +
+            "number, date of birth, address or any other identifying detail anywhere in the output. If no " +
+            'medication is legible, return {"medications":[],"transcription":"","notes":"<why>"}.',
         },
         {
           role: "user",
@@ -70,16 +74,19 @@ export async function extractFromImage(imageUrl: string): Promise<RawExtraction>
   return parsed;
 }
 
+// Regex scrub for identifiers leaking into free-text fields (NHS numbers, DOBs).
+export function scrubText(s: string): string {
+  return s
+    .replace(/\b\d{3}[ -]?\d{3}[ -]?\d{4}\b/g, "[removed]") // NHS number shape
+    .replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-](?:19|20)\d{2}\b/g, "[removed]") // dates e.g. DOB
+    .trim();
+}
+
 // STEP 2 — Strip PII. Structural guarantee first: only whitelisted medication
 // fields survive, so a name on the sheet cannot travel onward. Regex scrub on
-// top catches identifiers leaking into free-text fields (NHS numbers, DOBs).
+// top catches identifiers leaking into free-text fields.
 export function stripPii(raw: RawExtraction): (ExtractedMedication & { warnings?: string[] })[] {
-  const scrub = (s: string) =>
-    s
-      .replace(/\b\d{3}[ -]?\d{3}[ -]?\d{4}\b/g, "[removed]") // NHS number shape
-      .replace(/\b\d{1,2}[\/.-]\d{1,2}[\/.-](?:19|20)\d{2}\b/g, "[removed]") // dates e.g. DOB
-      .trim();
-
+  const scrub = scrubText;
   return raw.medications
     .filter((m) => m.drug?.trim())
     .map((m) => ({
@@ -279,6 +286,23 @@ export async function translateAndVerify(
   );
   const translation = t.choices[0]?.message?.content?.trim();
   if (!translation) throw new Error("Translation returned nothing");
+
+  return verifyTranslation(plainScript, translation, targetLanguage);
+}
+
+// The verification half on its own — also used when the clinician edits the
+// translation (or script) directly on the approval screen: whatever text will
+// actually be spoken gets a fresh round trip and fresh flags before approval.
+export async function verifyTranslation(
+  plainScript: string,
+  translation: string,
+  targetLanguage: string
+): Promise<{ translation: string; backTranslation: string; flags: Flag[] }> {
+  const langName = ALLOWED_LANGUAGES[targetLanguage];
+  if (!langName) {
+    throw new Error(`Language "${targetLanguage}" not allowed (hardcoded two: ${Object.keys(ALLOWED_LANGUAGES).join(", ")})`);
+  }
+  const client = openai();
 
   // Independent round trip — the back-translator never sees the original.
   const bt = await withTimeout(

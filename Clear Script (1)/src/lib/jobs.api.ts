@@ -10,6 +10,9 @@ const BASE = USE_MOCK ? "/api/jobs" : (import.meta.env["VITE_API_BASE"] ?? "/api
 
 export const usingMock = USE_MOCK;
 
+/** Base URL for job endpoints not wrapped here (e.g. `${jobsApiBase}/${id}/subtitles`). */
+export const jobsApiBase = BASE;
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return (await res.json()) as T;
@@ -59,4 +62,7 @@ export const jobQueryOptions = (id: string) => ({
     const status = query.state.data?.status;
     return status === "done" || status === "failed" ? false : 2000;
   },
+  // Keep polling even when the tab is backgrounded — a clinician switching
+  // apps mid-pipeline should come back to a current screen, not a stale one.
+  refetchIntervalInBackground: true,
 });

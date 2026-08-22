@@ -14,6 +14,19 @@ export interface ExtractedMedication {
   dose: string;
   freq: string;
   days: number;
+  /** Free-text directions for this medicine — prescriptions rarely fit four fields. */
+  notes?: string;
+  warnings?: string[];
+}
+
+/** Fields the clinician can edit on the approval screen (A's UI sends these
+ * to /approve and /recheck). Script or translation edits force re-verification
+ * before anything is approved. */
+export interface EditedFields {
+  extracted?: ExtractedMedication[];
+  transcription?: string;
+  plainScript?: string;
+  translation?: string;
 }
 
 export interface Flag {
@@ -28,6 +41,8 @@ export interface Job {
   sourceImageUrl: string | null;
   targetLanguage: string; // e.g. "ur", "pl" — captured at intake, alongside the photo
   extracted: ExtractedMedication[];
+  /** Full readable transcription of the sheet, PII-stripped. Shown/editable on A's approval screen. */
+  transcription?: string;
   plainScript: string;
   translation: string; // the APPROVED translation — this is what the presenter speaks
   backTranslation: string;
