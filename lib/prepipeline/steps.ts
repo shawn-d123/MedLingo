@@ -93,7 +93,11 @@ export function stripPii(raw: RawExtraction): (ExtractedMedication & { warnings?
 
 // STEP 3 — Structure cleanup via Pioneer (OpenAI-compatible endpoint).
 // Best-effort by design: skipped gracefully when unconfigured, and any error
-// falls back to the input untouched — never blocks the chain.
+// falls back to the input untouched — never blocks the chain. A hard account
+// error (e.g. billing not enabled) trips a breaker so later jobs skip the
+// round trip instead of re-failing on every run.
+let pioneerDisabled: string | null = null;
+
 export async function structureCleanup(
   extracted: (ExtractedMedication & { warnings?: string[] })[]
 ): Promise<(ExtractedMedication & { warnings?: string[] })[]> {
@@ -101,6 +105,10 @@ export async function structureCleanup(
   const model = process.env.PIONEER_GLINER_MODEL;
   if (!key || !model) {
     console.log("[prepipeline] Pioneer structuring skipped (PIONEER_API_KEY/PIONEER_GLINER_MODEL not set)");
+    return extracted;
+  }
+  if (pioneerDisabled) {
+    console.log(`[prepipeline] Pioneer structuring skipped (disabled this session: ${pioneerDisabled})`);
     return extracted;
   }
   try {
@@ -127,7 +135,9 @@ export async function structureCleanup(
     );
     return Array.isArray(cleaned) && cleaned.length > 0 ? cleaned : extracted;
   } catch (err) {
-    console.warn(`[prepipeline] Pioneer structuring failed (${(err as Error).message}) — using raw extraction`);
+    const message = (err as Error).message ?? String(err);
+    if (/payment|billing|permission/i.test(message)) pioneerDisabled = message.slice(0, 80);
+    console.warn(`[prepipeline] Pioneer structuring failed (${message}) — using raw extraction`);
     return extracted;
   }
 }
