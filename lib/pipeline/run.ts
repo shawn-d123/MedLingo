@@ -38,8 +38,14 @@ export async function runPostApprovalPipeline(jobId: string): Promise<Job> {
     const subtitlesVtt = buildVtt(job.plainScript);
     updateJob(jobId, { subtitlesVtt });
 
-    // Step 3 — VEED Fabric: illustrated presenter + audio -> lip-synced video
-    const videoUrl = await renderVideo(presenterImageUrl(job.targetLanguage), speech.audioUrl);
+    // Step 3 — VEED Fabric: synthetic presenter + audio -> lip-synced video.
+    // The request id is stored the moment it's queued, so if this call times
+    // out the finished render can still be collected (see recoverVideo).
+    const videoUrl = await renderVideo(
+      presenterImageUrl(job.targetLanguage),
+      speech.audioUrl,
+      (requestId) => updateJob(jobId, { falRequestId: requestId })
+    );
     console.log(`[pipeline] ${jobId}: video ready`);
 
     // Step 5 — finish

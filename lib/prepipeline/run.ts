@@ -5,6 +5,7 @@ import {
   scrubText,
   structureCleanup,
   writePlainScript,
+  condenseScript,
   groundAndRefine,
   translateAndVerify,
   verifyTranslation,
@@ -33,7 +34,10 @@ export async function runPreApprovalPipeline(jobId: string): Promise<Job> {
 
     updateJob(jobId, { status: "grounding" });
     const draft = await writePlainScript(extracted);
-    const { plainScript } = await groundAndRefine(extracted, draft);
+    const grounded = await groundAndRefine(extracted, draft);
+    // Grounding can re-inflate the script with leaflet detail — re-cap it, or
+    // the video render time runs away on multi-medication sheets.
+    const plainScript = await condenseScript(grounded.plainScript);
     updateJob(jobId, { plainScript });
     console.log(`[prepipeline] ${jobId}: plain script ready (${plainScript.split(/\s+/).length} words)`);
 

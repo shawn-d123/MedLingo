@@ -157,11 +157,22 @@ export async function structureCleanup(
   }
 }
 
-// STEP 4 — Plain-language script (English), ~20-30 seconds spoken.
+// Video render time scales with audio length, and a patient stops absorbing a
+// spoken list after about a minute — so the script has a hard ceiling even
+// when the sheet lists several medicines.
+const MAX_SCRIPT_WORDS = Number(process.env.MAX_SCRIPT_WORDS ?? 130);
+
+const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
+// STEP 4 — Plain-language script (English), ~20-45 seconds spoken.
 export async function writePlainScript(
   extracted: (ExtractedMedication & { warnings?: string[] })[]
 ): Promise<string> {
   if (extracted.length === 0) throw new Error("No medications extracted — nothing to write a script for.");
+
+  // Budget scales a little with the number of medicines, but never past the cap.
+  const budget = Math.min(MAX_SCRIPT_WORDS, 60 + (extracted.length - 1) * 25);
+
   const res = await withTimeout(
     openai().chat.completions.create({
       model: "gpt-4o",
@@ -171,10 +182,12 @@ export async function writePlainScript(
           content:
             "You write short spoken scripts explaining medication instructions to patients. Plain language at " +
             'a sixth-grade reading level — "take one capsule three times a day with food", never "TDS PO". ' +
-            "20-30 seconds when read aloud (roughly 50-75 words). Cover: what the medicine is (one clause), " +
-            "how much, how often and when, for how long (and to finish the course if it is an antibiotic), " +
-            "and any warning signs to come back for. Warm, calm, direct address. No greetings, no sign-off, " +
-            "no patient name. Output the script text only.",
+            `HARD LIMIT: no more than ${budget} words in total — this is a spoken script and going over ` +
+            "makes the video too long to be useful. For each medicine give only: what it is (a few words), " +
+            "how much, how often and when, and for how long (say to finish the course if it is an " +
+            "antibiotic). Then ONE short combined sentence covering the most important warning signs across " +
+            "all the medicines — do not list every possible side effect. Warm, calm, direct address. No " +
+            "greetings, no sign-off, no patient name. Output the script text only.",
         },
         { role: "user", content: JSON.stringify(extracted) },
       ],
@@ -184,7 +197,38 @@ export async function writePlainScript(
   );
   const script = res.choices[0]?.message?.content?.trim();
   if (!script) throw new Error("Plain-script generation returned nothing");
-  return script;
+
+  return condenseScript(script, budget);
+}
+
+/**
+ * Enforce the word budget the model was asked for. Dose, frequency and
+ * duration are never dropped — only the warning list is compressed — because
+ * a shortened script must still be a correct one.
+ */
+export async function condenseScript(script: string, budget = MAX_SCRIPT_WORDS): Promise<string> {
+  if (wordCount(script) <= budget) return script;
+  console.log(`[prepipeline] script is ${wordCount(script)} words (budget ${budget}) — condensing`);
+
+  const res = await withTimeout(
+    openai().chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            `Shorten this spoken patient script to ${budget} words or fewer. You MUST keep every drug name, ` +
+            "dose, frequency, timing and duration exactly as written. Compress only the warning signs — keep " +
+            "the most serious ones and drop the rest. Keep the plain sixth-grade tone. Output the script only.",
+        },
+        { role: "user", content: script },
+      ],
+    }),
+    LLM_TIMEOUT_MS,
+    "Script condensing"
+  );
+  const shortened = res.choices[0]?.message?.content?.trim();
+  return shortened && wordCount(shortened) < wordCount(script) ? shortened : script;
 }
 
 export interface GroundingNote {

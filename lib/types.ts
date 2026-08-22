@@ -51,6 +51,8 @@ export interface Job {
   audioUrl: string | null; // written by Person C only
   outputVideoUrl: string | null; // written by Person C only
   error: string | null;
+  /** Fal queue id for the Fabric render, so a slow video is never lost. */
+  falRequestId?: string | null;
   // Person C addition (additive, optional — flagged to A & B in the README):
   // English WebVTT subtitles for the result player, served at GET /api/jobs/:id/subtitles
   subtitlesVtt?: string | null;

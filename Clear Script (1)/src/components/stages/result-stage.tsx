@@ -27,9 +27,23 @@ function useSubtitles(jobId: string, ready: boolean) {
   return subsUrl;
 }
 
+/** Seconds since the clinician approved — so a long render reads as progress,
+ * not a hung screen. */
+function useElapsed(since: string | null | undefined) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!since) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [since]);
+  if (!since) return null;
+  return Math.max(0, Math.round((now - new Date(since).getTime()) / 1000));
+}
+
 export function ResultStage({ jobId, onRestart }: { jobId: string; onRestart: () => void }) {
   const { data: job, isPending } = useQuery(jobQueryOptions(jobId));
   const subsUrl = useSubtitles(jobId, job?.status === "done");
+  const elapsed = useElapsed(job?.status === "synthesizing" ? job.approvedAt : null);
 
   if (isPending || !job) {
     return (
@@ -83,9 +97,28 @@ export function ResultStage({ jobId, onRestart }: { jobId: string; onRestart: ()
         ) : (
           <div className="soft-inset flex aspect-video w-full flex-col items-center justify-center gap-4">
             <StatusLine status={job.status} />
-            <p className="max-w-md text-center text-sm text-muted-foreground">
-              Voice and video are generated from the approved translation only.
-            </p>
+            {job.status === "failed" ? (
+              <>
+                <p className="max-w-md text-center text-sm font-medium text-divergence-foreground">
+                  {job.error ?? "The pipeline stopped before the video was made."}
+                </p>
+                <p className="max-w-md text-center text-sm text-muted-foreground">
+                  The approved wording is safe below — nothing was sent to the patient.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="max-w-md text-center text-sm text-muted-foreground">
+                  Voice and video are generated from the approved translation only.
+                </p>
+                {elapsed !== null && (
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {Math.floor(elapsed / 60)}m {String(elapsed % 60).padStart(2, "0")}s elapsed ·
+                    lip-sync rendering usually takes 1–3 minutes
+                  </p>
+                )}
+              </>
+            )}
           </div>
         )}
       </section>
