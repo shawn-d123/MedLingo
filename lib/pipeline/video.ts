@@ -1,4 +1,4 @@
-import { falClient, withTimeout, mockMode, sleep } from "./util";
+import { falClient, withFalFailover, withTimeout, mockMode, sleep } from "./util";
 
 const VIDEO_TIMEOUT_MS = 420_000;
 
@@ -13,13 +13,15 @@ export async function renderVideo(presenterImageUrl: string, audioUrl: string): 
 
   const fal = falClient();
   const result = await withTimeout(
-    fal.subscribe("veed/fabric-1.0", {
-      input: {
-        image_url: presenterImageUrl,
-        audio_url: audioUrl,
-        resolution: (process.env.VIDEO_RESOLUTION === "720p" ? "720p" : "480p") as "480p" | "720p",
-      },
-    }),
+    withFalFailover("VEED Fabric", () =>
+      fal.subscribe("veed/fabric-1.0", {
+        input: {
+          image_url: presenterImageUrl,
+          audio_url: audioUrl,
+          resolution: (process.env.VIDEO_RESOLUTION === "720p" ? "720p" : "480p") as "480p" | "720p",
+        },
+      })
+    ),
     VIDEO_TIMEOUT_MS,
     "VEED Fabric 1.0"
   );

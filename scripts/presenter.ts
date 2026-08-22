@@ -6,7 +6,7 @@
 // imitate any real clinician, and the video is labelled AI on screen.
 import "./env";
 import { readFileSync, writeFileSync } from "node:fs";
-import { falClient, withTimeout } from "../lib/pipeline/util";
+import { falClient, withFalFailover, withTimeout } from "../lib/pipeline/util";
 import { download } from "./helpers";
 
 const BASE =
@@ -60,7 +60,9 @@ async function generate(name: string, v: Variant) {
   const fal = falClient();
   console.log(`Generating "${name}" presenter (${v.model})...`);
   const result = await withTimeout(
-    fal.subscribe(v.model, { input: { prompt: v.prompt, image_size: "portrait_4_3", num_images: 1 } }),
+    withFalFailover("image generation", () =>
+      fal.subscribe(v.model, { input: { prompt: v.prompt, image_size: "portrait_4_3", num_images: 1 } })
+    ),
     180_000,
     "Fal image generation"
   );

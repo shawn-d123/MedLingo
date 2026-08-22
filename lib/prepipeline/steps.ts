@@ -188,12 +188,36 @@ export interface GroundingNote {
 // STEP 5 — Ground with Tavily: fetch the official patient information leaflet
 // per drug, then align the script's claims with it. Never fabricate: a drug
 // with no solid source keeps a generic-but-accurate description.
+// Tavily keys tried in order; on an auth/quota response the next key takes
+// over for the rest of the session.
+let tavilyKeyIndex = 0;
+
+async function tavilySearch(query: string): Promise<{ results?: { title: string; url: string; content: string }[] }> {
+  const keys = [process.env.TAVILY_API_KEY, process.env.TAVILY_API_KEY_2].filter((k): k is string => Boolean(k));
+  if (keys.length === 0) throw new Error("TAVILY_API_KEY not set");
+  for (;;) {
+    const r = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: keys[tavilyKeyIndex], query, search_depth: "basic", max_results: 3 }),
+    });
+    if (!r.ok) {
+      if ([401, 402, 403, 429, 432].includes(r.status) && tavilyKeyIndex < keys.length - 1) {
+        tavilyKeyIndex += 1;
+        console.warn(`[prepipeline] Tavily key ${tavilyKeyIndex + 1}/${keys.length} taking over (HTTP ${r.status})`);
+        continue;
+      }
+      throw new Error(`Tavily HTTP ${r.status}`);
+    }
+    return (await r.json()) as { results?: { title: string; url: string; content: string }[] };
+  }
+}
+
 export async function groundAndRefine(
   extracted: (ExtractedMedication & { warnings?: string[] })[],
   plainScript: string
 ): Promise<{ plainScript: string; groundingNotes: GroundingNote[] }> {
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
+  if (!process.env.TAVILY_API_KEY && !process.env.TAVILY_API_KEY_2) {
     console.warn("[prepipeline] TAVILY_API_KEY not set — skipping grounding");
     return { plainScript, groundingNotes: extracted.map((m) => ({ drug: m.drug, sourceUrl: null, sourceTitle: null })) };
   }
@@ -203,19 +227,7 @@ export async function groundAndRefine(
   for (const med of extracted) {
     try {
       const res = await withTimeout(
-        fetch("https://api.tavily.com/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: apiKey,
-            query: `${med.drug} patient information leaflet what it is for warnings side effects`,
-            search_depth: "basic",
-            max_results: 3,
-          }),
-        }).then(async (r) => {
-          if (!r.ok) throw new Error(`Tavily HTTP ${r.status}`);
-          return (await r.json()) as { results?: { title: string; url: string; content: string }[] };
-        }),
+        tavilySearch(`${med.drug} patient information leaflet what it is for warnings side effects`),
         30_000,
         `Tavily search (${med.drug})`
       );

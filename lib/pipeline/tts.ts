@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { falClient, withTimeout, mockMode, sleep } from "./util";
+import { falClient, withFalFailover, withTimeout, mockMode, sleep } from "./util";
 
 const TTS_TIMEOUT_MS = 120_000;
 
@@ -44,7 +44,9 @@ export async function synthesizeFal(text: string, lang: string): Promise<SpeechR
   if (endpoint.includes("elevenlabs")) input.language_code = lang;
 
   const result = await withTimeout(
-    fal.subscribe(endpoint, { input } as Parameters<typeof fal.subscribe>[1]),
+    withFalFailover(`TTS (${endpoint})`, () =>
+      fal.subscribe(endpoint, { input } as Parameters<typeof fal.subscribe>[1])
+    ),
     TTS_TIMEOUT_MS,
     `Fal TTS (${endpoint})`
   );
@@ -77,6 +79,10 @@ export async function synthesizeOpenAI(text: string, lang: string): Promise<Spee
   // Fabric needs a hosted URL, so push the mp3 into Fal storage (same account).
   const fal = falClient();
   const file = new File([new Uint8Array(buffer)], `tts-${lang}-${Date.now()}.mp3`, { type: "audio/mpeg" });
-  const url = await withTimeout(fal.storage.upload(file), 60_000, "Fal storage upload");
+  const url = await withTimeout(
+    withFalFailover("storage upload", () => fal.storage.upload(file)),
+    60_000,
+    "Fal storage upload"
+  );
   return { audioUrl: url, provider: "openai", voice };
 }
