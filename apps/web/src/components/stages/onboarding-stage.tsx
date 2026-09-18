@@ -10,7 +10,10 @@ export function OnboardingStage({ onStart }: { onStart: () => void }) {
         </span>
 
         <h1 className="mt-6 text-6xl font-semibold tracking-tight">
-          Med<span className="bg-gradient-to-r from-brand-from to-brand-to bg-clip-text text-transparent">Lingo</span>
+          Med
+          <span className="bg-gradient-to-r from-brand-from to-brand-to bg-clip-text text-transparent">
+            Lingo
+          </span>
         </h1>
         <p className="mt-5 max-w-xl text-xl text-muted-foreground">
           Photograph a prescription and MedLingo turns it into a short video that explains the
@@ -45,7 +48,13 @@ export function OnboardingStage({ onStart }: { onStart: () => void }) {
 
       <div className="soft-card relative overflow-hidden p-10">
         <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full brand-gradient text-primary-foreground shadow-xl">
-          <svg viewBox="0 0 24 24" className="h-20 w-20" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-20 w-20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          >
             <rect x="3" y="3" width="18" height="18" rx="6" />
             <path d="M8 12h8M12 8v8" />
           </svg>

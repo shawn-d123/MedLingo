@@ -1,10 +1,5 @@
 export type JobStatus =
-  | "reading"
-  | "grounding"
-  | "awaiting_approval"
-  | "synthesizing"
-  | "done"
-  | "failed";
+  "reading" | "grounding" | "awaiting_approval" | "synthesizing" | "done" | "failed";
 
 export type ExtractedItem = {
   drug: string;

@@ -27,13 +27,7 @@ function draftFromJob(job: Job): Draft {
   };
 }
 
-export function ApprovalStage({
-  jobId,
-  onApproved,
-}: {
-  jobId: string;
-  onApproved: () => void;
-}) {
+export function ApprovalStage({ jobId, onApproved }: { jobId: string; onApproved: () => void }) {
   const { data: job, isPending } = useQuery(jobQueryOptions(jobId));
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState<"recheck" | "approve" | null>(null);
@@ -212,9 +206,21 @@ export function ApprovalStage({
                     </span>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Drug" value={row.drug} onChange={(v) => updateRow(setDraft, index, { drug: v })} />
-                    <Field label="Dose" value={row.dose} onChange={(v) => updateRow(setDraft, index, { dose: v })} />
-                    <Field label="Frequency" value={row.freq} onChange={(v) => updateRow(setDraft, index, { freq: v })} />
+                    <Field
+                      label="Drug"
+                      value={row.drug}
+                      onChange={(v) => updateRow(setDraft, index, { drug: v })}
+                    />
+                    <Field
+                      label="Dose"
+                      value={row.dose}
+                      onChange={(v) => updateRow(setDraft, index, { dose: v })}
+                    />
+                    <Field
+                      label="Frequency"
+                      value={row.freq}
+                      onChange={(v) => updateRow(setDraft, index, { freq: v })}
+                    />
                     <Field
                       label="Days"
                       value={String(row.days)}
@@ -239,7 +245,9 @@ export function ApprovalStage({
                           key={key}
                           className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground"
                         >
-                          <span className="font-mono uppercase tracking-wide opacity-70">{key}</span>
+                          <span className="font-mono uppercase tracking-wide opacity-70">
+                            {key}
+                          </span>
                           <span className="mx-1.5 opacity-40">·</span>
                           <span className="font-medium">{value}</span>
                         </span>
@@ -251,13 +259,20 @@ export function ApprovalStage({
             </div>
           </Panel>
 
-          <Panel title="Plain-language script (English)" hint="What the presenter says, before translation.">
+          <Panel
+            title="Plain-language script (English)"
+            hint="What the presenter says, before translation."
+          >
             <Textarea
               value={draft.plainScript}
               onChange={(e) => setDraft((d) => (d ? { ...d, plainScript: e.target.value } : d))}
               className="min-h-40 resize-y rounded-xl bg-background text-lg leading-relaxed"
             />
-            <FlaggedText text={draft.plainScript} flags={job.flags} className="mt-3 text-sm text-muted-foreground" />
+            <FlaggedText
+              text={draft.plainScript}
+              flags={job.flags}
+              className="mt-3 text-sm text-muted-foreground"
+            />
           </Panel>
         </div>
       </div>
@@ -265,7 +280,13 @@ export function ApprovalStage({
       {/* Translation handoff arrow */}
       <div className="mt-8 flex flex-col items-center gap-2">
         <span className="flex h-12 w-12 items-center justify-center rounded-full brand-gradient text-primary-foreground shadow-md">
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-6 w-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M12 4v14M6 13l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
@@ -355,7 +376,10 @@ function updateRow(
 ) {
   setDraft((d) => {
     if (!d) return d;
-    return { ...d, extracted: d.extracted.map((row, i) => (i === index ? { ...row, ...patch } : row)) };
+    return {
+      ...d,
+      extracted: d.extracted.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    };
   });
 }
 
@@ -370,7 +394,9 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{label}</Label>
+      <Label className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </Label>
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}

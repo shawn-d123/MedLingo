@@ -72,7 +72,8 @@ const SPELLING_EQUIVALENTS: Array<[RegExp, string]> = [
 
 function normalizeForMatch(text: string) {
   let out = text.toLowerCase();
-  for (const [pattern, replacement] of SPELLING_EQUIVALENTS) out = out.replace(pattern, replacement);
+  for (const [pattern, replacement] of SPELLING_EQUIVALENTS)
+    out = out.replace(pattern, replacement);
   return out
     .replace(/(\d)\s+(mg|g|ml|mcg|µg|iu)\b/g, "$1$2")
     .replace(/[^\p{L}\p{N}]+/gu, " ")

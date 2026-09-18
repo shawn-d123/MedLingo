@@ -82,7 +82,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Take-Home" },
       {
         property: "og:description",
-        content: "Prescription instructions turned into a clinician-approved video in the patient's language.",
+        content:
+          "Prescription instructions turned into a clinician-approved video in the patient's language.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

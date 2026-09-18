@@ -41,48 +41,45 @@ export function CameraCapture({ onCapture, autoStart = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
-  const start = useCallback(
-    async (preferredDeviceId?: string) => {
-      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-        setState("unsupported");
-        setError("This browser cannot open a camera stream.");
-        return;
+  const start = useCallback(async (preferredDeviceId?: string) => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setState("unsupported");
+      setError("This browser cannot open a camera stream.");
+      return;
+    }
+    setState("starting");
+    setError(null);
+    try {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: preferredDeviceId
+          ? { deviceId: { exact: preferredDeviceId } }
+          : { facingMode: { ideal: "environment" }, width: { ideal: 1920 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => undefined);
       }
-      setState("starting");
-      setError(null);
-      try {
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: preferredDeviceId
-            ? { deviceId: { exact: preferredDeviceId } }
-            : { facingMode: { ideal: "environment" }, width: { ideal: 1920 } },
-          audio: false,
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => undefined);
-        }
-        setState("live");
-        const all = await navigator.mediaDevices.enumerateDevices();
-        const cams = all.filter((d) => d.kind === "videoinput");
-        setDevices(cams);
-        const active = stream.getVideoTracks()[0]?.getSettings().deviceId ?? "";
-        setDeviceId(preferredDeviceId ?? active);
-      } catch (e) {
-        const name = e instanceof DOMException ? e.name : "";
-        setState(name === "NotAllowedError" ? "denied" : "idle");
-        setError(
-          name === "NotAllowedError"
-            ? "Camera access was blocked. Allow it in the browser address bar, then try again."
-            : name === "NotFoundError"
-              ? "No camera was found on this device."
-              : "Could not open the camera.",
-        );
-      }
-    },
-    [],
-  );
+      setState("live");
+      const all = await navigator.mediaDevices.enumerateDevices();
+      const cams = all.filter((d) => d.kind === "videoinput");
+      setDevices(cams);
+      const active = stream.getVideoTracks()[0]?.getSettings().deviceId ?? "";
+      setDeviceId(preferredDeviceId ?? active);
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : "";
+      setState(name === "NotAllowedError" ? "denied" : "idle");
+      setError(
+        name === "NotAllowedError"
+          ? "Camera access was blocked. Allow it in the browser address bar, then try again."
+          : name === "NotFoundError"
+            ? "No camera was found on this device."
+            : "Could not open the camera.",
+      );
+    }
+  }, []);
 
   function capture() {
     const video = videoRef.current;
@@ -136,7 +133,13 @@ export function CameraCapture({ onCapture, autoStart = false }: Props) {
         {state !== "live" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-capture-from to-capture-to text-white shadow-md">
-              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-7 w-7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
                 <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2a2 2 0 0 0 1.7-.95l.5-.8A2 2 0 0 1 10.6 3.3h2.8a2 2 0 0 1 1.7.95l.5.8A2 2 0 0 0 17.3 6h1.2A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-8Z" />
                 <circle cx="12" cy="12.5" r="3.5" />
               </svg>

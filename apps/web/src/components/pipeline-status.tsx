@@ -1,13 +1,7 @@
 import { STATUS_COPY, type JobStatus } from "@/lib/job";
 import { cn } from "@/lib/utils";
 
-const ORDER: JobStatus[] = [
-  "reading",
-  "grounding",
-  "awaiting_approval",
-  "synthesizing",
-  "done",
-];
+const ORDER: JobStatus[] = ["reading", "grounding", "awaiting_approval", "synthesizing", "done"];
 
 const SHORT: Record<JobStatus, string> = {
   reading: "Read photo",
