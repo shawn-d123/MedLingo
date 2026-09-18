@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.git
+.next
+**/.next
+.output
+**/.output
+dist
+**/dist
+backups
+voice-test
+docs
+*.md
+.env
+.env.*
+!.env.example

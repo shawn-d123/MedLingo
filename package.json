@@ -1,35 +1,25 @@
 {
   "name": "medlingo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "Turns a photographed prescription into a video the patient understands, in their own language, with a clinician approval gate in the middle.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "presenter": "tsx scripts/presenter.ts",
-    "voice-test": "tsx scripts/voice-test.ts",
-    "render-once": "tsx scripts/run-once.ts",
-    "backups": "tsx scripts/backups.ts",
-    "read": "tsx scripts/prepipeline-cli.ts",
-    "keycheck": "tsx scripts/keycheck.ts"
-  },
-  "dependencies": {
-    "@fal-ai/client": "^1.10.1",
-    "next": "16.3.2",
-    "openai": "^7.5.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @medlingo/api",
+    "dev:web": "npm run dev --workspace @medlingo/web",
+    "build": "npm run build --workspace @medlingo/api && npm run build --workspace @medlingo/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "tsc --noEmit -p apps/api && tsc --noEmit -p apps/web",
+    "keycheck": "npm run keycheck --workspace @medlingo/api"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.2",
-    "tailwindcss": "^4",
-    "tsx": "^4.23.12",
-    "typescript": "^5"
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
