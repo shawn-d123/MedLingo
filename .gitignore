@@ -40,3 +40,6 @@ npm-debug.log*
 
 # deploy
 .vercel
+
+# nitro/wrangler build output
+.wrangler/
