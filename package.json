@@ -14,7 +14,8 @@
     "build": "npm run build --workspace @medlingo/api && npm run build --workspace @medlingo/web",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "tsc --noEmit -p apps/api && tsc --noEmit -p apps/web",
-    "keycheck": "npm run keycheck --workspace @medlingo/api"
+    "keycheck": "npm run keycheck --workspace @medlingo/api",
+    "smoke": "npm run smoke --workspace @medlingo/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

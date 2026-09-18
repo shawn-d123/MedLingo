@@ -8,6 +8,7 @@
 [![Result](https://img.shields.io/badge/result-top%205%20of%2038-16a34a)]()
 [![Stack](https://img.shields.io/badge/Next.js-API-black)]()
 [![Stack](https://img.shields.io/badge/TanStack%20Start-Web-ef4444)]()
+[![CI](https://github.com/shawn-d123/MedLingo/actions/workflows/ci.yml/badge.svg)](https://github.com/shawn-d123/MedLingo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-64748b)]()
 
 <img src="docs/screenshots/01-landing.png" alt="MedLingo landing screen" width="820">
@@ -129,25 +130,46 @@ docker compose up --build
 
 ---
 
-## Working on it without spending credits
+## Running it without any API keys
+
+The whole product — capture, approval gate, result screen — runs against
+fixtures with **no API keys at all**:
 
 ```bash
-MOCK_PIPELINE=1    # in apps/api/.env.local — stubs every external call
+echo "MOCK_PIPELINE=1" >> apps/api/.env.local
+npm run dev
 ```
 
-The API also ships CLI harnesses so each half can be exercised without a browser:
+Every paid call (vision, grounding, translation, speech, video) returns a canned
+result, so a fresh clone is demoable on day one and stays demoable after the API
+keys expire. The placeholder video is a public sample clip, so the result screen
+needs a connection to play it; nothing else does. The same switch backs the
+smoke test, which is fully offline:
+
+```bash
+npm run smoke        # drives a job end to end and asserts the guarantees
+npm run typecheck
+npm run lint
+npm run build
+```
+
+`npm run smoke` is the one to run first if you come back to this cold — it
+proves the pipeline, the approval gate, the edit-and-recheck path and the PII
+stripping still hold, in a few seconds, for free. CI runs all four on every
+push.
+
+## Working against the real APIs
 
 ```bash
 cd apps/api
+npm run keycheck                                     # which keys are still alive
 npm run read -- samples/printed-amoxicillin.png ur   # photo -> full job JSON
 npm run voice-test                                   # Fal vs OpenAI TTS, both languages
 npm run render-once                                  # approved job -> downloaded MP4
-npm run keycheck                                     # which API keys are alive
 ```
 
-Three sample prescriptions live in [`apps/api/samples`](apps/api/samples) — printed single-drug, printed multi-drug, and handwritten.
-
----
+Three sample prescriptions live in [`apps/api/samples`](apps/api/samples) —
+printed single-drug, printed multi-drug, and handwritten.
 
 ## Repository layout
 
@@ -176,6 +198,8 @@ docs/screenshots/
 - **Jobs are held in memory.** Restarting the API clears them. Fine for a demo, and honest about it — a real deployment needs a datastore, which is the first thing I'd add.
 - **Two languages**, Urdu and Polish, chosen at intake and fixed before generation.
 - **Video generation costs money and takes time** — roughly 1–3 minutes depending on script length, which is why spoken length is capped.
+- **API keys expire, and the free tiers run out.** `npm run keycheck` reports which are still live; `MOCK_PIPELINE=1` keeps the app fully demoable when none are. The pipeline also fails over automatically across `FAL_KEY`, `FAL_KEY_2` and `FAL_KEY_3`.
+- **Presenter images are hosted on fal's CDN** and referenced by URL, because the video model needs to fetch them. If those URLs ever lapse, `npm run presenter -- both` regenerates them; local copies are kept in `apps/api/public`.
 - **Pioneer/Fastino is integrated but was never exercised** — the account had no billing enabled during the build, so the step skips gracefully. The integration is in the repo; the benefit is not claimed.
 
 ---

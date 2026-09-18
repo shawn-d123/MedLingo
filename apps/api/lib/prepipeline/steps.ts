@@ -6,7 +6,8 @@
 // touching any caller. Reconstructed here because that file wasn't in B's push.
 
 import OpenAI from "openai";
-import { withTimeout } from "../pipeline/util";
+import { withTimeout, mockMode, sleep } from "../pipeline/util";
+import { mockExtraction, mockPlainScript, mockTranslate } from "./fixtures";
 import type { ExtractedMedication, Flag } from "../types";
 
 export const ALLOWED_LANGUAGES: Record<string, string> = { ur: "Urdu", pl: "Polish" };
@@ -38,6 +39,11 @@ export interface RawExtraction {
 
 // STEP 1 — Extract (OpenAI vision). Accepts a data URL or https URL.
 export async function extractFromImage(imageUrl: string): Promise<RawExtraction> {
+  if (mockMode()) {
+    await sleep(400);
+    return mockExtraction;
+  }
+
   const res = await withTimeout(
     openai().chat.completions.create({
       model: VISION_MODEL,
@@ -172,6 +178,10 @@ export async function writePlainScript(
   extracted: (ExtractedMedication & { warnings?: string[] })[]
 ): Promise<string> {
   if (extracted.length === 0) throw new Error("No medications extracted — nothing to write a script for.");
+  if (mockMode()) {
+    await sleep(300);
+    return mockPlainScript;
+  }
 
   const budget = MAX_SCRIPT_WORDS;
 
@@ -210,6 +220,8 @@ export async function writePlainScript(
  * a shortened script must still be a correct one.
  */
 export async function condenseScript(script: string, budget = MAX_SCRIPT_WORDS): Promise<string> {
+  if (mockMode()) return script;
+
   let current = script;
 
   // Two passes: the first keeps warnings in reduced form, the second strips
@@ -293,6 +305,17 @@ export async function groundAndRefine(
   extracted: (ExtractedMedication & { warnings?: string[] })[],
   plainScript: string
 ): Promise<{ plainScript: string; groundingNotes: GroundingNote[] }> {
+  if (mockMode()) {
+    await sleep(300);
+    return {
+      plainScript,
+      groundingNotes: extracted.map((m) => ({
+        drug: m.drug,
+        sourceUrl: "https://www.medicines.org.uk/emc (mock)",
+        sourceTitle: `${m.drug} patient information leaflet (mock)`,
+      })),
+    };
+  }
   if (!process.env.TAVILY_API_KEY && !process.env.TAVILY_API_KEY_2) {
     console.warn("[prepipeline] TAVILY_API_KEY not set — skipping grounding");
     return { plainScript, groundingNotes: extracted.map((m) => ({ drug: m.drug, sourceUrl: null, sourceTitle: null })) };
@@ -349,6 +372,11 @@ export async function translateAndVerify(
   plainScript: string,
   targetLanguage: string
 ): Promise<{ translation: string; backTranslation: string; flags: Flag[] }> {
+  if (mockMode()) {
+    await sleep(400);
+    return mockTranslate(targetLanguage);
+  }
+
   const langName = ALLOWED_LANGUAGES[targetLanguage];
   if (!langName) {
     throw new Error(`Language "${targetLanguage}" not allowed (hardcoded two: ${Object.keys(ALLOWED_LANGUAGES).join(", ")})`);
@@ -386,6 +414,11 @@ export async function verifyTranslation(
   translation: string,
   targetLanguage: string
 ): Promise<{ translation: string; backTranslation: string; flags: Flag[] }> {
+  if (mockMode()) {
+    await sleep(400);
+    return { ...mockTranslate(targetLanguage), translation };
+  }
+
   const langName = ALLOWED_LANGUAGES[targetLanguage];
   if (!langName) {
     throw new Error(`Language "${targetLanguage}" not allowed (hardcoded two: ${Object.keys(ALLOWED_LANGUAGES).join(", ")})`);

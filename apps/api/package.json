@@ -12,7 +12,8 @@
     "render-once": "tsx scripts/run-once.ts",
     "backups": "tsx scripts/backups.ts",
     "read": "tsx scripts/prepipeline-cli.ts",
-    "keycheck": "tsx scripts/keycheck.ts"
+    "keycheck": "tsx scripts/keycheck.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",

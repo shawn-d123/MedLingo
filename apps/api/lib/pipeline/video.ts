@@ -119,6 +119,9 @@ export async function recoverVideo(requestId: string): Promise<string | null> {
 export function presenterImageUrl(lang?: string): string {
   const perLang = lang ? process.env[`PRESENTER_IMAGE_URL_${lang.toUpperCase()}`] : undefined;
   const url = perLang ?? process.env.PRESENTER_IMAGE_URL;
+  // Evaluated as an argument to renderVideo, so it must not throw before the
+  // mock branch inside renderVideo is reached.
+  if (!url && mockMode()) return "mock://presenter";
   if (!url) {
     throw new Error(
       "PRESENTER_IMAGE_URL is not set — run `npm run presenter -- both` to generate presenters, then restart the server"
